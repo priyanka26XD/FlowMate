@@ -433,7 +433,7 @@ const App = () => {
             model: "gemini-2.5-flash-preview-tts"
         };
 
-        const apiKey = "AIzaSyA4cX9mZB4Q4m3mwDOFn7coJys4bjIjdak";
+        const apiKey = "";
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
 
         // Simulate a faster network response
