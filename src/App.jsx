@@ -431,18 +431,18 @@ const App = () => {
             model: "gemini-2.5-flash-preview-tts"
         };
         
-        const apiKey = "AIzaSyDdCH11JPOdRvg2Wp6zsbEO46pFSbEnP_g"; // Leave as-is, Canvas will provide it at runtime.
+        const apiKey = "AIzaSyDdCH11JPOdRvg2Wp6zsbEO46pFSbEnP_g"; // Canvas will provide this at runtime.
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
 
-        // Simulate a faster network response
-        await new Promise(resolve => setTimeout(resolve, 500)); 
-        
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
         
+        if (!response.ok) {
+            throw new Error(`API call failed with status: ${response.status}`);
+        }
         const result = await response.json();
         const part = result?.candidates?.[0]?.content?.parts?.[0];
         const audioData = part?.inlineData?.data;
@@ -468,7 +468,7 @@ const App = () => {
                 isPlaying: true,
                 isAudioLoading: false,
                 currentTrack: track,
-                totalTime: '...',
+                totalTime: formatTime(audio.duration),
                 progress: 0,
                 currentTime: '0:00'
             }));
@@ -613,24 +613,22 @@ const App = () => {
       setAiChatInput('');
       setIsAiTyping(true);
 
-      const apiKey = "";
+      const apiKey = ""; // Canvas will provide this at runtime.
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
       
       const systemPrompt = "You are an AI learning assistant named FlowMate. Your purpose is to help users with their learning goals, provide explanations, and offer guidance. Your tone is friendly, encouraging, and helpful. Do not use markdown formatting.";
       const userQuery = userMessage.message;
 
-      const payload = {
-        contents: [{ parts: [{ text: userQuery }] }],
-        systemInstruction: {
-            parts: [{ text: systemPrompt }]
-        },
-      };
-
       try {
           const response = await fetch(apiUrl, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload),
+              body: JSON.stringify({
+                  contents: [{ parts: [{ text: userQuery }] }],
+                  systemInstruction: {
+                      parts: [{ text: systemPrompt }]
+                  },
+              }),
           });
 
           if (!response.ok) {
@@ -1017,7 +1015,7 @@ const App = () => {
       const ageBasedContentTypes = getAgeBasedContent(user.age);
       const allContent = [
           ...contentLibrary.podcasts.map(item => ({ ...item, type: 'podcasts' })),
-          ...contentLibrary.meditations.map(item => ({ ...item, type: 'meditations' })),
+          ...contentLibrary.meditations.map(item => ({ ...item, type: 'meditation' })),
           ...contentLibrary.learning.map(item => ({ ...item, type: 'learning' })),
           ...contentLibrary.childrensStories.map(item => ({ ...item, type: 'childrensStories' })),
           ...contentLibrary.poems.map(item => ({ ...item, type: 'poems' })),
