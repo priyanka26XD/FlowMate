@@ -174,7 +174,7 @@ const App = () => {
         duration: '25:00',
         category: 'Technology',
         level: 'Expert',
-        thumbnail: '⚛',
+        thumbnail: '⚛️',
         description: 'An in-depth look into the world of quantum computing, covering fundamental principles and potential applications.',
         type: 'advanced topics'
       },
@@ -333,7 +333,7 @@ const App = () => {
             totalTime: formatTime(totalDuration)
           }));
         }
-        animationFrameId.current = requestAnimationFrame(updateProgress);
+      animationFrameId.current = requestAnimationFrame(updateProgress);
     };
 
     if (audioPlayer.isPlaying) {
@@ -417,71 +417,71 @@ const App = () => {
       closeAudioPlayer();
     }
 
-    setAudioPlayer(prev => ({ ...prev, isPlaying: false, isAudioLoading: true, currentTrack: track }));
+    setAudioPlayer(prev => ({...prev, isPlaying: false, isAudioLoading: true, currentTrack: track}));
 
     try {
-      const payload = {
-        contents: [{ parts: [{ text: text }] }],
-        generationConfig: {
-          responseModalities: ["AUDIO"],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: voice }
-            }
-          }
-        },
-        model: "gemini-2.5-flash-preview-tts"
-      };
-
-      const apiKey = "";
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
-
-      // Simulate a faster network response
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const result = await response.json();
-      const part = result?.candidates?.[0]?.content?.parts?.[0];
-      const audioData = part?.inlineData?.data;
-      const mimeType = part?.inlineData?.mimeType;
-
-      if (audioData && mimeType && mimeType.startsWith("audio/")) {
-        const pcmData = base64ToArrayBuffer(audioData);
-        const sampleRate = parseInt(mimeType.match(/rate=(\d+)/)[1], 10);
-        const pcm16 = new Int16Array(pcmData);
-        const wavBlob = pcmToWav(pcm16, sampleRate);
-        const audioUrl = URL.createObjectURL(wavBlob);
-
-        const audio = new Audio(audioUrl);
-        audio.onended = () => {
-          setAudioPlayer(prev => ({ ...prev, isPlaying: false, progress: 100 }));
+        const payload = {
+            contents: [{ parts: [{ text: text }] }],
+            generationConfig: {
+                responseModalities: ["AUDIO"],
+                speechConfig: {
+                    voiceConfig: {
+                        prebuiltVoiceConfig: { voiceName: voice }
+                    }
+                }
+            },
+            model: "gemini-2.5-flash-preview-tts"
         };
 
-        audio.play();
-        audioSource.current = audio;
+        const apiKey = "AIzaSyA4cX9mZB4Q4m3mwDOFn7coJys4bjIjdak";
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
 
-        setAudioPlayer(prev => ({
-          ...prev,
-          isPlaying: true,
-          isAudioLoading: false,
-          currentTrack: track,
-          totalTime: '...',
-          progress: 0,
-          currentTime: '0:00'
-        }));
+        // Simulate a faster network response
+        await new Promise(resolve => setTimeout(resolve, 500));
 
-      } else {
-        console.error("No audio data received from API");
-        setAudioPlayer(prev => ({ ...prev, isAudioLoading: false, currentTrack: null }));
-      }
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        const part = result?.candidates?.[0]?.content?.parts?.[0];
+        const audioData = part?.inlineData?.data;
+        const mimeType = part?.inlineData?.mimeType;
+
+        if (audioData && mimeType && mimeType.startsWith("audio/")) {
+            const pcmData = base64ToArrayBuffer(audioData);
+            const sampleRate = parseInt(mimeType.match(/rate=(\d+)/)[1], 10);
+            const pcm16 = new Int16Array(pcmData);
+            const wavBlob = pcmToWav(pcm16, sampleRate);
+            const audioUrl = URL.createObjectURL(wavBlob);
+
+            const audio = new Audio(audioUrl);
+            audio.onended = () => {
+                setAudioPlayer(prev => ({ ...prev, isPlaying: false, progress: 100 }));
+            };
+
+            audio.play();
+            audioSource.current = audio;
+
+            setAudioPlayer(prev => ({
+                ...prev,
+                isPlaying: true,
+                isAudioLoading: false,
+                currentTrack: track,
+                totalTime: '...',
+                progress: 0,
+                currentTime: '0:00'
+            }));
+
+        } else {
+            console.error("No audio data received from API");
+            setAudioPlayer(prev => ({...prev, isAudioLoading: false, currentTrack: null}));
+        }
     } catch (error) {
-      console.error("Error generating or playing audio:", error);
-      setAudioPlayer(prev => ({ ...prev, isAudioLoading: false, currentTrack: null }));
+        console.error("Error generating or playing audio:", error);
+        setAudioPlayer(prev => ({...prev, isAudioLoading: false, currentTrack: null}));
     }
   };
 
@@ -716,6 +716,11 @@ const App = () => {
         <Target size={128} className="absolute -top-4 -left-4 text-white/10 animate-[spin_20s_linear_infinite]" />
         <Dumbbell size={150} className="absolute top-1/4 -right-10 text-white/10 animate-[gentle-float_8s_ease-in-out_infinite]" />
         <Headphones size={140} className="absolute bottom-4 -left-8 text-white/10 animate-[gentle-float-reverse_10s_ease-in-out_infinite]" />
+        <Zap size={100} className="absolute top-1/3 left-1/4 text-yellow-300/10 animate-[gentle-float_7s_ease-in-out_infinite_1s]" />
+        <Star size={110} className="absolute bottom-1/4 right-1/4 text-white/10 animate-[gentle-float-reverse_9s_ease-in-out_infinite_2s]" />
+        <Award size={130} className="absolute top-2/3 right-1/2 text-white/10 animate-[gentle-float_12s_ease-in-out_infinite_3s]" />
+        <Heart size={90} className="absolute top-1/2 left-1/3 text-red-400/10 animate-[gentle-float_6s_ease-in-out_infinite_4s]" />
+
         <span className="absolute top-[20%] left-[10%] text-white/10 text-lg font-semibold animate-[gentle-float_8s_ease-in-out_infinite_2s]">Learn</span>
         <span className="absolute top-[30%] right-[15%] text-white/10 text-lg font-semibold animate-[gentle-float-reverse_9s_ease-in-out_infinite_1s]">Grow</span>
         <span className="absolute bottom-[25%] left-[20%] text-white/10 text-lg font-semibold animate-[gentle-float_10s_ease-in-out_infinite]">Focus</span>
@@ -739,18 +744,18 @@ const App = () => {
           {onboardingStep === 0 && (
             <>
               <div className="text-center mb-8">
-                <div className="bg-white/10 backdrop-blur-sm rounded-full w-20 h-20 mx-auto mb-4 flex items-center justify-center relative overflow-hidden">
-                  {logos.map((logo, index) => (
-                    <div
-                      key={index}
-                      className={`absolute inset-0 transition-opacity duration-1000 flex items-center justify-center ${
-                        currentLogoIndex === index ? 'opacity-100' : 'opacity-0'
-                      }`}
-                    >
-                      {logo}
-                    </div>
-                  ))}
-                </div>
+                  <div className="bg-white/10 backdrop-blur-sm rounded-full w-20 h-20 mx-auto mb-4 flex items-center justify-center relative overflow-hidden">
+                    {logos.map((logo, index) => (
+                      <div
+                        key={index}
+                        className={`absolute inset-0 transition-opacity duration-1000 flex items-center justify-center ${
+                          currentLogoIndex === index ? 'opacity-100' : 'opacity-0'
+                        }`}
+                      >
+                        {logo}
+                      </div>
+                    ))}
+                  </div>
                 <h1 className="text-3xl font-bold text-white mb-2">FlowMate</h1>
                 <p className="text-blue-200">Achieve your goals with focus and flow</p>
               </div>
@@ -844,7 +849,7 @@ const App = () => {
                           user.selectedCommunities.includes(goal.community)
                             ? 'bg-blue-500 border-blue-500'
                             : 'border-white/50'
-                          }`}>
+                        }`}>
                           {user.selectedCommunities.includes(goal.community) && (
                             <Check className="w-4 h-4 text-white" />
                           )}
@@ -891,31 +896,31 @@ const App = () => {
         </div>
 
         {audioPlayer.isAudioLoading ? (
-          <div className="flex items-center justify-center p-4 opacity-100 transition-opacity duration-300">
-            <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse" />
-            <span className={`text-sm ml-3 ${themeClasses.textSecondary}`}>Generating audio...</span>
-          </div>
+            <div className="flex items-center justify-center p-4 opacity-100 transition-opacity duration-300">
+              <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse" />
+              <span className={`text-sm ml-3 ${themeClasses.textSecondary}`}>Generating audio...</span>
+            </div>
         ) : (
-          <>
+            <>
             <div className="flex items-center justify-between mb-1 opacity-100 transition-opacity duration-300">
-              <div className={`text-xs ${themeClasses.textSecondary} transition-colors duration-300`}>
+                <div className={`text-xs ${themeClasses.textSecondary} transition-colors duration-300`}>
                 {audioPlayer.currentTime}
-              </div>
-              <div className={`text-xs ${themeClasses.textSecondary} transition-colors duration-300`}>
+                </div>
+                <div className={`text-xs ${themeClasses.textSecondary} transition-colors duration-300`}>
                 {audioPlayer.totalTime}
-              </div>
+                </div>
             </div>
             <div
-              ref={progressBarRef}
-              className={`w-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded-full h-1 mb-4 cursor-pointer`}
-              onMouseDown={handleSeek}
+                ref={progressBarRef}
+                className={`w-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded-full h-1 mb-4 cursor-pointer`}
+                onMouseDown={handleSeek}
             >
-              <div
+                <div
                 className="bg-blue-500 h-1 rounded-full transition-all duration-300"
                 style={{ width: `${audioPlayer.progress}%` }}
-              />
+                />
             </div>
-          </>
+            </>
         )}
 
         <div className="flex items-center justify-center space-x-6">
@@ -944,11 +949,11 @@ const App = () => {
     const getFilteredContent = () => {
       const ageBasedContentTypes = getAgeBasedContent(user.age);
       const allContent = [
-        ...contentLibrary.podcasts.map(item => ({ ...item, type: 'podcasts' })),
-        ...contentLibrary.meditations.map(item => ({ ...item, type: 'meditations' })),
-        ...contentLibrary.learning.map(item => ({ ...item, type: 'learning' })),
-        ...contentLibrary.childrensStories.map(item => ({ ...item, type: 'childrensStories' })),
-        ...contentLibrary.poems.map(item => ({ ...item, type: 'poems' })),
+          ...contentLibrary.podcasts.map(item => ({ ...item, type: 'podcasts' })),
+          ...contentLibrary.meditations.map(item => ({ ...item, type: 'meditations' })),
+          ...contentLibrary.learning.map(item => ({ ...item, type: 'learning' })),
+          ...contentLibrary.childrensStories.map(item => ({ ...item, type: 'childrensStories' })),
+          ...contentLibrary.poems.map(item => ({ ...item, type: 'poems' })),
       ];
 
       if (selectedCategory === 'all') {
@@ -998,7 +1003,7 @@ const App = () => {
                         : item.type === 'podcasts'
                           ? 'bg-blue-100 text-blue-800'
                           : 'bg-green-100 text-green-800'
-                      }`}>
+                    }`}>
                       {item.level || item.type.charAt(0).toUpperCase() + item.type.slice(1)}
                     </span>
                     <Play className="w-5 h-5 text-blue-500" />
@@ -1037,9 +1042,9 @@ const App = () => {
           <div className="flex items-center space-x-2 mb-2">
             <User className="w-5 h-5 text-purple-500" />
             <h3 className={`font-semibold ${themeClasses.text} transition-colors duration-300`}>Your Level</h3>
+            <div className={`text-2xl font-bold ${themeClasses.text} transition-colors duration-300`}>{user.level}</div>
+            <p className={`text-sm ${themeClasses.textSecondary} transition-colors duration-300`}>Knowledge Seeker</p>
           </div>
-          <div className={`text-2xl font-bold ${themeClasses.text} transition-colors duration-300`}>{user.level}</div>
-          <p className={`text-sm ${themeClasses.textSecondary} transition-colors duration-300`}>Knowledge Seeker</p>
         </div>
         <div className={`p-4 rounded-2xl ${themeClasses.cardBg} border ${themeClasses.border} transition-colors duration-300`}>
           <div className="flex items-center space-x-2 mb-2">
@@ -1055,9 +1060,9 @@ const App = () => {
       </div>
 
       <div className={`p-4 rounded-2xl ${themeClasses.cardBg} border ${themeClasses.border} mb-6 text-center`}>
-        <Zap className="w-6 h-6 text-yellow-400 mx-auto mb-2" />
-        <p className={`italic ${themeClasses.text}`}>"{dailyQuote.quote}"</p>
-        <p className={`text-sm mt-2 font-semibold ${themeClasses.textSecondary}`}>- {dailyQuote.author}</p>
+          <Zap className="w-6 h-6 text-yellow-400 mx-auto mb-2" />
+          <p className={`italic ${themeClasses.text}`}>"{dailyQuote.quote}"</p>
+          <p className={`text-sm mt-2 font-semibold ${themeClasses.textSecondary}`}>- {dailyQuote.author}</p>
       </div>
 
       <h2 className={`text-xl font-bold mb-4 ${themeClasses.text} transition-colors duration-300`}>Daily Goal</h2>
@@ -1111,12 +1116,12 @@ const App = () => {
         {todos.map(todo => (
           <div key={todo.id} className={`flex items-center justify-between p-4 rounded-2xl border ${themeClasses.cardBg} ${themeClasses.border} transition-colors duration-300 ${
             todo.completed ? 'opacity-60' : ''
-            }`}>
+          }`}>
             <div className="flex items-center space-x-4 flex-1">
               <button onClick={() => toggleTodo(todo.id)} className="flex-shrink-0">
                 <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
                   todo.completed ? 'bg-blue-500 border-blue-500' : themeClasses.border
-                  }`}>
+                }`}>
                   {todo.completed && <Check className="w-4 h-4 text-white" />}
                 </div>
               </button>
@@ -1146,7 +1151,7 @@ const App = () => {
           <div key={msg.id} className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}>
             <div className={`p-3 rounded-xl max-w-[80%] transition-colors duration-300 ${
               msg.isUser ? 'bg-blue-500 text-white' : `${themeClasses.cardBg} ${themeClasses.text}`
-              }`}>
+            }`}>
               <p>{msg.message}</p>
               <span className={`block mt-1 text-xs text-right transition-colors duration-300 ${msg.isUser ? 'text-blue-200' : themeClasses.textSecondary}`}>{msg.timestamp}</span>
             </div>
@@ -1199,7 +1204,7 @@ const App = () => {
               <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xl">{msg.avatar}</div>
               <div className={`p-3 rounded-xl max-w-[80%] transition-colors duration-300 ${
                 msg.user === 'You' ? 'bg-blue-500 text-white' : `${themeClasses.cardBg} ${themeClasses.text}`
-                }`}>
+              }`}>
                 <div className={`flex items-center justify-between mb-1 ${msg.user === 'You' ? 'flex-row-reverse' : ''}`}>
                   <span className={`font-semibold text-xs transition-colors duration-300 ${msg.user === 'You' ? 'text-blue-200' : themeClasses.textSecondary}`}>{msg.user}</span>
                   <span className={`text-xs transition-colors duration-300 ${msg.user === 'You' ? 'text-blue-200' : themeClasses.textSecondary}`}>{msg.time}</span>
@@ -1315,6 +1320,11 @@ const App = () => {
         <Target size={128} className={`absolute -top-4 -left-4 ${darkMode ? 'text-white/5' : 'text-gray-900/5'} animate-[spin_20s_linear_infinite]`} />
         <Dumbbell size={150} className={`absolute top-1/4 -right-10 ${darkMode ? 'text-white/5' : 'text-gray-900/5'} animate-[gentle-float_8s_ease-in-out_infinite]`} />
         <Headphones size={140} className={`absolute bottom-4 -left-8 ${darkMode ? 'text-white/5' : 'text-gray-900/5'} animate-[gentle-float-reverse_10s_ease-in-out_infinite]`} />
+        <Zap size={100} className={`absolute top-1/3 left-1/4 ${darkMode ? 'text-yellow-300/10' : 'text-yellow-500/10'} animate-[gentle-float_7s_ease-in-out_infinite_1s]`} />
+        <Star size={110} className={`absolute bottom-1/4 right-1/4 ${darkMode ? 'text-white/10' : 'text-gray-900/10'} animate-[gentle-float-reverse_9s_ease-in-out_infinite_2s]`} />
+        <Award size={130} className={`absolute top-2/3 right-1/2 ${darkMode ? 'text-white/10' : 'text-gray-900/10'} animate-[gentle-float_12s_ease-in-out_infinite_3s]`} />
+        <Heart size={90} className={`absolute top-1/2 left-1/3 ${darkMode ? 'text-red-400/10' : 'text-red-500/10'} animate-[gentle-float_6s_ease-in-out_infinite_4s]`} />
+
 
         <LeaderboardModal isOpen={isLeaderboardOpen} onClose={() => setIsLeaderboardOpen(false)} />
         <div className="max-w-md mx-auto relative pb-20 min-h-screen flex flex-col w-full z-10">
@@ -1359,7 +1369,7 @@ const App = () => {
 
           {/* Bottom Nav */}
           <div className={`fixed bottom-0 left-0 right-0 ${themeClasses.cardBg} border-t ${themeClasses.border} shadow-lg z-40 transition-colors duration-300`}>
-            <div className="flex justify-around items-center h-16 max-w-md mx-auto">
+              <div className="flex justify-around items-center h-16 max-w-md mx-auto">
               <button
                 onClick={() => setActiveTab('home')}
                 className={`flex flex-col items-center justify-center space-y-1 transition-colors ${activeTab === 'home' ? 'text-blue-500' : themeClasses.textSecondary}`}
@@ -1374,7 +1384,7 @@ const App = () => {
                 <BookOpen className="w-6 h-6" />
                 <span className="text-xs">Learn</span>
               </button>
-              <button
+                <button
                 onClick={() => setIsLeaderboardOpen(true)}
                 className={`flex flex-col items-center justify-center space-y-1 transition-colors ${isLeaderboardOpen ? 'text-blue-500' : themeClasses.textSecondary}`}
               >
@@ -1395,7 +1405,7 @@ const App = () => {
                 <Bot className="w-6 h-6" />
                 <span className="text-xs">AI</span>
               </button>
-            </div>
+              </div>
           </div>
         </div>
       </div>
