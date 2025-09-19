@@ -34,7 +34,7 @@ const App = () => {
   const [activeTab, setActiveTab] = useState('home');
   const [todos, setTodos] = useState([
     { id: 1, text: 'Complete React Hooks lesson', completed: false, points: 50 },
-    { id: 2, text: 'Meditate for 10 minutes', completed: true, points: 30 },
+    { id: 2, text: 'Meditate for 10 minutes', completed: false, points: 30 },
     { id: 3, text: 'Listen to productivity podcast', completed: false, points: 40 }
   ]);
   const [newTodo, setNewTodo] = useState('');
@@ -58,14 +58,12 @@ const App = () => {
   const [aiChatInput, setAiChatInput] = useState('');
   const [isAiTyping, setIsAiTyping] = useState(false);
   const aiChatRef = useRef(null);
-
+  
   const audioSource = useRef(null);
   const animationFrameId = useRef(null);
   const progressBarRef = useRef(null);
 
   // Refs for all text inputs to fix the cursor focus issue
-  const nameInputRef = useRef(null);
-  const ageInputRef = useRef(null);
   const newTodoInputRef = useRef(null);
   const newMessageInputRef = useRef(null);
   const aiChatInputRef = useRef(null);
@@ -174,7 +172,7 @@ const App = () => {
         duration: '25:00',
         category: 'Technology',
         level: 'Expert',
-        thumbnail: '⚛️',
+        thumbnail: '⚛',
         description: 'An in-depth look into the world of quantum computing, covering fundamental principles and potential applications.',
         type: 'advanced topics'
       },
@@ -190,24 +188,24 @@ const App = () => {
       }
     ],
     childrensStories: [
-      {
-        id: 1,
-        title: 'The Little Prince',
-        duration: '30:00',
-        category: 'Adventure',
-        thumbnail: '👑',
-        description: 'A classic tale of a young prince who travels the universe, learning about love, loss, and friendship.',
-        type: 'childrens stories'
-      },
-      {
-        id: 2,
-        title: 'The Velveteen Rabbit',
-        duration: '25:00',
-        category: 'Fantasy',
-        thumbnail: '🐰',
-        description: 'The story of how a toy rabbit becomes real through the love of his owner.',
-        type: 'childrens stories'
-      }
+        {
+          id: 1,
+          title: 'The Little Prince',
+          duration: '30:00',
+          category: 'Adventure',
+          thumbnail: '👑',
+          description: 'A classic tale of a young prince who travels the universe, learning about love, loss, and friendship.',
+          type: 'childrensStories'
+        },
+        {
+          id: 2,
+          title: 'The Velveteen Rabbit',
+          duration: '25:00',
+          category: 'Fantasy',
+          thumbnail: '🐰',
+          description: 'The story of how a toy rabbit becomes real through the love of his owner.',
+          type: 'childrensStories'
+        }
     ],
     poems: [
       {
@@ -323,17 +321,17 @@ const App = () => {
   useEffect(() => {
     const updateProgress = () => {
         if (audioSource.current && !isNaN(audioSource.current.duration)) {
-          const currentTime = audioSource.current.currentTime;
-          const totalDuration = audioSource.current.duration;
-          const progress = (currentTime / totalDuration) * 100;
-          setAudioPlayer(prev => ({
-            ...prev,
-            progress: progress,
-            currentTime: formatTime(currentTime),
-            totalTime: formatTime(totalDuration)
-          }));
+            const currentTime = audioSource.current.currentTime;
+            const totalDuration = audioSource.current.duration;
+            const progress = (currentTime / totalDuration) * 100;
+            setAudioPlayer(prev => ({
+                ...prev,
+                progress: progress,
+                currentTime: formatTime(currentTime),
+                totalTime: formatTime(totalDuration)
+            }));
         }
-      animationFrameId.current = requestAnimationFrame(updateProgress);
+        animationFrameId.current = requestAnimationFrame(updateProgress);
     };
 
     if (audioPlayer.isPlaying) {
@@ -432,19 +430,19 @@ const App = () => {
             },
             model: "gemini-2.5-flash-preview-tts"
         };
-
-        const apiKey = "";
+        
+        const apiKey = "AIzaSyAugshMsFJDBEhwR8kLHFcUmkjP3F_RdXg";
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
 
         // Simulate a faster network response
-        await new Promise(resolve => setTimeout(resolve, 500));
-
+        await new Promise(resolve => setTimeout(resolve, 500)); 
+        
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-
+        
         const result = await response.json();
         const part = result?.candidates?.[0]?.content?.parts?.[0];
         const audioData = part?.inlineData?.data;
@@ -456,12 +454,12 @@ const App = () => {
             const pcm16 = new Int16Array(pcmData);
             const wavBlob = pcmToWav(pcm16, sampleRate);
             const audioUrl = URL.createObjectURL(wavBlob);
-
+            
             const audio = new Audio(audioUrl);
             audio.onended = () => {
                 setAudioPlayer(prev => ({ ...prev, isPlaying: false, progress: 100 }));
             };
-
+            
             audio.play();
             audioSource.current = audio;
 
@@ -476,7 +474,7 @@ const App = () => {
             }));
 
         } else {
-            console.error("No audio data received from API");
+            console.error("No audio data received from API. Check your API key and quota.", result);
             setAudioPlayer(prev => ({...prev, isAudioLoading: false, currentTrack: null}));
         }
     } catch (error) {
@@ -489,13 +487,13 @@ const App = () => {
     let textToSpeak;
     let voice;
     if (track.type === 'podcast') {
-      textToSpeak = `Hello, and welcome to the ${track.title}. In this episode, titled ${track.episode}, we will discuss ${track.description}.`;
+      textToSpeak = `Hello, and welcome to ${track.title}! In today's episode, '${track.episode}', we will explore ${track.description}.`;
       voice = 'Kore';
     } else if (track.type === 'meditation') {
-      textToSpeak = `Welcome to your meditation session, ${track.title}. This will be an approximately ${track.duration} minute session focused on ${track.description}. Please find a comfortable position.`;
+      textToSpeak = `Welcome to your meditation session: ${track.title}. Let's begin a ${track.duration} session focused on ${track.description}. Please find a comfortable and quiet space.`;
       voice = 'Puck';
     } else {
-      textToSpeak = `Welcome to the lesson on ${track.title}. This is a ${track.level} level tutorial on ${track.description}.`;
+      textToSpeak = `Welcome to the lesson on ${track.title}. This is a ${track.level}-level tutorial where you will learn about ${track.description}.`;
       voice = 'Charon';
     }
 
@@ -606,7 +604,7 @@ const App = () => {
       setAiChatInput('');
       setIsAiTyping(true);
 
-      // Simulate AI response
+      // Simulate AI response (replace with actual API call)
       setTimeout(() => {
         const aiResponses = [
           "That's a great question! Based on your learning goals, I'd suggest starting with the fundamentals and building up gradually.",
@@ -654,6 +652,43 @@ const App = () => {
     border: darkMode ? 'border-gray-700/50' : 'border-gray-200',
     input: darkMode ? 'bg-gray-700/80 text-white border-gray-600' : 'bg-white/80 text-gray-900 border-gray-300',
     hover: darkMode ? 'hover:bg-gray-700/60' : 'hover:bg-gray-100/60'
+  };
+
+  const InterestBubbles = ({ goals, darkMode }) => {
+    const bubblePositions = [
+      { top: '20%', left: '10%', animation: 'gentle-float 8s ease-in-out infinite 2s' },
+      { top: '30%', right: '15%', animation: 'gentle-float-reverse 9s ease-in-out infinite 1s' },
+      { bottom: '25%', left: '20%', animation: 'gentle-float 10s ease-in-out infinite' },
+      { bottom: '15%', right: '10%', animation: 'gentle-float-reverse 7s ease-in-out infinite 3s' },
+      { top: '50%', left: '40%', animation: 'gentle-float 12s ease-in-out infinite 1.5s' },
+      { top: '70%', right: '35%', animation: 'gentle-float-reverse 8s ease-in-out infinite 2.5s' }
+    ];
+
+    const iconColor = darkMode ? 'text-white/10' : 'text-gray-900/10';
+    const iconSizes = ['text-6xl', 'text-7xl', 'text-8xl', 'text-9xl'];
+
+    return (
+      <>
+        {goals.map((goal, index) => {
+            const position = bubblePositions[index % bubblePositions.length];
+            const size = iconSizes[index % iconSizes.length];
+
+            return (
+              <div
+                key={goal.id}
+                className={`absolute ${size} ${iconColor} transition-colors duration-300`}
+                style={{
+                    ...position,
+                    zIndex: 0,
+                    animation: position.animation
+                }}
+              >
+                {goal.icon}
+              </div>
+            );
+        })}
+      </>
+    );
   };
 
   // Onboarding Component
@@ -713,13 +748,16 @@ const App = () => {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-800 to-indigo-900 p-6 flex flex-col items-center justify-center relative overflow-hidden">
         {/* Decorative Background Elements */}
-        <Target size={128} className="absolute -top-4 -left-4 text-white/10 animate-[spin_20s_linear_infinite]" />
-        <Dumbbell size={150} className="absolute top-1/4 -right-10 text-white/10 animate-[gentle-float_8s_ease-in-out_infinite]" />
-        <Headphones size={140} className="absolute bottom-4 -left-8 text-white/10 animate-[gentle-float-reverse_10s_ease-in-out_infinite]" />
-        <Zap size={100} className="absolute top-1/3 left-1/4 text-yellow-300/10 animate-[gentle-float_7s_ease-in-out_infinite_1s]" />
-        <Star size={110} className="absolute bottom-1/4 right-1/4 text-white/10 animate-[gentle-float-reverse_9s_ease-in-out_infinite_2s]" />
-        <Award size={130} className="absolute top-2/3 right-1/2 text-white/10 animate-[gentle-float_12s_ease-in-out_infinite_3s]" />
-        <Heart size={90} className="absolute top-1/2 left-1/3 text-red-400/10 animate-[gentle-float_6s_ease-in-out_infinite_4s]" />
+        <>
+            <Target size={128} className="absolute -top-4 -left-4 text-white/10 animate-[spin_20s_linear_infinite]" />
+            <Dumbbell size={150} className="absolute top-1/4 -right-10 text-white/10 animate-[gentle-float_8s_ease-in-out_infinite]" />
+            <Headphones size={140} className="absolute bottom-4 -left-8 text-white/10 animate-[gentle-float-reverse_10s_ease-in-out_infinite]" />
+            <Zap size={100} className="absolute top-1/3 left-1/4 text-yellow-300/10 animate-[gentle-float_7s_ease-in-out_infinite_1s]" />
+            <Star size={110} className="absolute bottom-1/4 right-1/4 text-white/10 animate-[gentle-float-reverse_9s_ease-in-out_infinite_2s]" />
+            <Award size={130} className="absolute top-2/3 right-1/2 text-white/10 animate-[gentle-float_12s_ease-in-out_infinite_3s]" />
+            <Heart size={90} className="absolute top-1/2 left-1/3 text-red-400/10 animate-[gentle-float_6s_ease-in-out_infinite_4s]" />
+            <InterestBubbles goals={user.goals} darkMode={true} />
+        </>
 
         <span className="absolute top-[20%] left-[10%] text-white/10 text-lg font-semibold animate-[gentle-float_8s_ease-in-out_infinite_2s]">Learn</span>
         <span className="absolute top-[30%] right-[15%] text-white/10 text-lg font-semibold animate-[gentle-float-reverse_9s_ease-in-out_infinite_1s]">Grow</span>
@@ -765,7 +803,6 @@ const App = () => {
                 <p className="text-blue-200 mb-4">Let's personalize your learning journey</p>
                 <input
                   type="text"
-                  ref={nameInputRef}
                   placeholder="Enter your name"
                   value={localName}
                   onChange={(e) => setLocalName(e.target.value)}
@@ -812,7 +849,6 @@ const App = () => {
               <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mb-6 text-center">
                 <input
                   type="number"
-                  ref={ageInputRef}
                   placeholder="Enter your age"
                   value={localAge}
                   onChange={(e) => setLocalAge(e.target.value)}
@@ -894,11 +930,11 @@ const App = () => {
             <X className={`w-6 h-6 ${themeClasses.text}`} />
           </button>
         </div>
-
+        
         {audioPlayer.isAudioLoading ? (
             <div className="flex items-center justify-center p-4 opacity-100 transition-opacity duration-300">
-              <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse" />
-              <span className={`text-sm ml-3 ${themeClasses.textSecondary}`}>Generating audio...</span>
+                <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse" />
+                <span className={`text-sm ml-3 ${themeClasses.textSecondary}`}>Generating audio...</span>
             </div>
         ) : (
             <>
@@ -910,7 +946,7 @@ const App = () => {
                 {audioPlayer.totalTime}
                 </div>
             </div>
-            <div
+            <div 
                 ref={progressBarRef}
                 className={`w-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded-full h-1 mb-4 cursor-pointer`}
                 onMouseDown={handleSeek}
@@ -1042,6 +1078,8 @@ const App = () => {
           <div className="flex items-center space-x-2 mb-2">
             <User className="w-5 h-5 text-purple-500" />
             <h3 className={`font-semibold ${themeClasses.text} transition-colors duration-300`}>Your Level</h3>
+          </div>
+          <div className="flex items-baseline space-x-2">
             <div className={`text-2xl font-bold ${themeClasses.text} transition-colors duration-300`}>{user.level}</div>
             <p className={`text-sm ${themeClasses.textSecondary} transition-colors duration-300`}>Knowledge Seeker</p>
           </div>
@@ -1114,8 +1152,8 @@ const App = () => {
       </form>
       <div className="space-y-3">
         {todos.map(todo => (
-          <div key={todo.id} className={`flex items-center justify-between p-4 rounded-2xl border ${themeClasses.cardBg} ${themeClasses.border} transition-colors duration-300 ${
-            todo.completed ? 'opacity-60' : ''
+          <div key={todo.id} className={`flex items-center justify-between p-4 rounded-2xl border ${themeClasses.cardBg} ${themeClasses.border} transition-all duration-300 ${
+            todo.completed ? (darkMode ? 'opacity-50 bg-green-900/20' : 'opacity-60 bg-green-100') : ''
           }`}>
             <div className="flex items-center space-x-4 flex-1">
               <button onClick={() => toggleTodo(todo.id)} className="flex-shrink-0">
@@ -1317,6 +1355,7 @@ const App = () => {
     return (
       <div className={`min-h-screen flex flex-col ${themeClasses.bg} ${themeClasses.text} transition-colors duration-300 relative overflow-hidden`}>
         <InteractiveBackground darkMode={darkMode} />
+        <InterestBubbles goals={user.goals} darkMode={darkMode} />
         <Target size={128} className={`absolute -top-4 -left-4 ${darkMode ? 'text-white/5' : 'text-gray-900/5'} animate-[spin_20s_linear_infinite]`} />
         <Dumbbell size={150} className={`absolute top-1/4 -right-10 ${darkMode ? 'text-white/5' : 'text-gray-900/5'} animate-[gentle-float_8s_ease-in-out_infinite]`} />
         <Headphones size={140} className={`absolute bottom-4 -left-8 ${darkMode ? 'text-white/5' : 'text-gray-900/5'} animate-[gentle-float-reverse_10s_ease-in-out_infinite]`} />
@@ -1405,7 +1444,7 @@ const App = () => {
                 <Bot className="w-6 h-6" />
                 <span className="text-xs">AI</span>
               </button>
-              </div>
+            </div>
           </div>
         </div>
       </div>
