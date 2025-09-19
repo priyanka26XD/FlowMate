@@ -298,38 +298,38 @@ const App = () => {
 
   // Keep focus on the new todo input
   useEffect(() => {
-    if (newTodoInputRef.current) {
+    if (activeTab === 'todos' && newTodoInputRef.current) {
       newTodoInputRef.current.focus();
     }
-  }, [newTodo]);
+  }, [activeTab, newTodo]);
 
   // Keep focus on the community chat input
   useEffect(() => {
-    if (newMessageInputRef.current) {
+    if (activeTab === 'community' && newMessageInputRef.current) {
       newMessageInputRef.current.focus();
     }
-  }, [newMessage]);
+  }, [activeTab, newMessage]);
 
   // Keep focus on the AI chat input
   useEffect(() => {
-    if (aiChatInputRef.current) {
+    if (activeTab === 'ai' && aiChatInputRef.current) {
       aiChatInputRef.current.focus();
     }
-  }, [aiChatInput]);
+  }, [activeTab, aiChatInput]);
 
   // Audio playback progress loop
   useEffect(() => {
     const updateProgress = () => {
         if (audioSource.current && !isNaN(audioSource.current.duration)) {
-            const currentTime = audioSource.current.currentTime;
-            const totalDuration = audioSource.current.duration;
-            const progress = (currentTime / totalDuration) * 100;
-            setAudioPlayer(prev => ({
-                ...prev,
-                progress: progress,
-                currentTime: formatTime(currentTime),
-                totalTime: formatTime(totalDuration)
-            }));
+          const currentTime = audioSource.current.currentTime;
+          const totalDuration = audioSource.current.duration;
+          const progress = (currentTime / totalDuration) * 100;
+          setAudioPlayer(prev => ({
+            ...prev,
+            progress: progress,
+            currentTime: formatTime(currentTime),
+            totalTime: formatTime(totalDuration)
+          }));
         }
         animationFrameId.current = requestAnimationFrame(updateProgress);
     };
@@ -431,7 +431,7 @@ const App = () => {
             model: "gemini-2.5-flash-preview-tts"
         };
         
-        const apiKey = "AIzaSyAugshMsFJDBEhwR8kLHFcUmkjP3F_RdXg";
+        const apiKey = "AIzaSyDdCH11JPOdRvg2Wp6zsbEO46pFSbEnP_g"; // Leave as-is, Canvas will provide it at runtime.
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
 
         // Simulate a faster network response
@@ -486,15 +486,24 @@ const App = () => {
   const playAudio = (track) => {
     let textToSpeak;
     let voice;
-    if (track.type === 'podcast') {
+    if (['podcasts', 'news summaries', 'long-form podcasts', 'short-form podcasts'].includes(track.type)) {
       textToSpeak = `Hello, and welcome to ${track.title}! In today's episode, '${track.episode}', we will explore ${track.description}.`;
       voice = 'Kore';
-    } else if (track.type === 'meditation') {
+    } else if (['meditation'].includes(track.type)) {
       textToSpeak = `Welcome to your meditation session: ${track.title}. Let's begin a ${track.duration} session focused on ${track.description}. Please find a comfortable and quiet space.`;
       voice = 'Puck';
-    } else {
+    } else if (['educational articles', 'advanced topics'].includes(track.type)) {
       textToSpeak = `Welcome to the lesson on ${track.title}. This is a ${track.level}-level tutorial where you will learn about ${track.description}.`;
       voice = 'Charon';
+    } else if (['childrensStories'].includes(track.type)) {
+      textToSpeak = `Once upon a time, there was a story called ${track.title}. Here is the story: ${track.description}`;
+      voice = 'Leda';
+    } else if (['poems'].includes(track.type)) {
+      textToSpeak = `Here is a beautiful poem from the collection called ${track.title}. ${track.description}`;
+      voice = 'Erinome';
+    } else {
+      textToSpeak = "I am sorry, I could not find the content you requested.";
+      voice = 'Kore';
     }
 
     playGeneratedAudio(textToSpeak, voice, track);
@@ -604,30 +613,52 @@ const App = () => {
       setAiChatInput('');
       setIsAiTyping(true);
 
-      // Simulate AI response (replace with actual API call)
-      setTimeout(() => {
-        const aiResponses = [
-          "That's a great question! Based on your learning goals, I'd suggest starting with the fundamentals and building up gradually.",
-          "I can help you create a personalized study plan. What specific topics are you most interested in?",
-          "Here's what I recommend: Break down complex topics into smaller, manageable chunks that fit your commute time.",
-          "Your progress looks good! Keep maintaining that streak. Consistency is key to effective learning.",
-          "I notice you're interested in coding. Would you like some beginner-friendly coding exercises for your commute?",
-          "Great mindset! Learning during commute time is an excellent way to maximize productivity.",
-          "Based on your current level, I think you're ready to tackle some intermediate topics. Want some suggestions?"
-        ];
+      const apiKey = "";
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+      
+      const systemPrompt = "You are an AI learning assistant named FlowMate. Your purpose is to help users with their learning goals, provide explanations, and offer guidance. Your tone is friendly, encouraging, and helpful. Do not use markdown formatting.";
+      const userQuery = userMessage.message;
 
-        const randomResponse = aiResponses[Math.floor(Math.random() * aiResponses.length)];
+      const payload = {
+        contents: [{ parts: [{ text: userQuery }] }],
+        systemInstruction: {
+            parts: [{ text: systemPrompt }]
+        },
+      };
 
-        const aiMessage = {
-          id: Date.now() + 1,
-          isUser: false,
-          message: randomResponse,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
+      try {
+          const response = await fetch(apiUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+          });
 
-        setAiChatMessages(prev => [...prev, aiMessage]);
-        setIsAiTyping(false);
-      }, 1500);
+          if (!response.ok) {
+              throw new Error(`API call failed with status: ${response.status}`);
+          }
+          const result = await response.json();
+          const aiResponseText = result?.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't generate a response. Please try again.";
+          
+          const aiMessage = {
+              id: Date.now() + 1,
+              isUser: false,
+              message: aiResponseText,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          setAiChatMessages(prev => [...prev, aiMessage]);
+
+      } catch (error) {
+          console.error("Error fetching AI response:", error);
+          const errorMessage = {
+              id: Date.now() + 1,
+              isUser: false,
+              message: "I'm having trouble connecting right now. Please check your network or try again later.",
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          };
+          setAiChatMessages(prev => [...prev, errorMessage]);
+      } finally {
+          setIsAiTyping(false);
+      }
     }
   };
 
@@ -993,7 +1024,38 @@ const App = () => {
       ];
 
       if (selectedCategory === 'all') {
-        return allContent.filter(item => ageBasedContentTypes.includes(item.type) || (item.type === 'learning' && ageBasedContentTypes.includes('advanced topics')) || (item.type === 'podcasts' && ageBasedContentTypes.includes('long-form podcasts')) || (item.type === 'podcasts' && ageBasedContentTypes.includes('short-form podcasts')) || (item.type === 'podcasts' && ageBasedContentTypes.includes('news summaries')));
+        const uniqueContent = new Set();
+        return allContent.filter(item => {
+          let shouldInclude = false;
+          if (ageBasedContentTypes.includes(item.type)) {
+            shouldInclude = true;
+          }
+          if (item.type === 'learning' && ageBasedContentTypes.includes('advanced topics')) {
+            shouldInclude = true;
+          }
+          if (item.type === 'podcasts' && ageBasedContentTypes.includes('long-form podcasts')) {
+            shouldInclude = true;
+          }
+          if (item.type === 'podcasts' && ageBasedContentTypes.includes('short-form podcasts')) {
+            shouldInclude = true;
+          }
+          if (item.type === 'podcasts' && ageBasedContentTypes.includes('news summaries')) {
+            shouldInclude = true;
+          }
+          if (item.type === 'podcasts' && ['long-form podcasts', 'short-form podcasts', 'news summaries'].includes(item.type)) {
+            shouldInclude = true;
+          }
+          
+          if(shouldInclude) {
+            if(uniqueContent.has(`${item.type}-${item.id}`)) {
+              return false;
+            } else {
+              uniqueContent.add(`${item.type}-${item.id}`);
+              return true;
+            }
+          }
+          return false;
+        });
       }
 
       return allContent.filter(item => item.type === selectedCategory);
@@ -1444,7 +1506,7 @@ const App = () => {
                 <Bot className="w-6 h-6" />
                 <span className="text-xs">AI</span>
               </button>
-            </div>
+              </div>
           </div>
         </div>
       </div>
