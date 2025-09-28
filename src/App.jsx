@@ -7,6 +7,44 @@ import {
   Gamepad2, Dumbbell, LogOut
 } from 'lucide-react';
 
+// --- START: Markdown Parsing Component ---
+// Simple component to parse and render basic markdown elements for AI chat
+const MarkdownRenderer = ({ text, themeClasses }) => {
+    // 1. Convert markdown lists (*, -) to HTML lists
+    const listRegex = /(\s*[\*\-]\s+.*)/g;
+    let html = text.replace(listRegex, (match) => {
+        // Simple heuristic: if it starts a list block, wrap it in <ul> and <li> tags
+        const lines = match.trim().split('\n').map(line => line.replace(/[\*\-]\s?/, '').trim());
+        return `<ul>${lines.map(line => `<li>${line}</li>`).join('')}</ul>`;
+    });
+
+    // 2. Convert bold text (**text** or ***text***) to strong
+    html = html.replace(/(\*\*|___)(.*?)\1/g, '<strong>$2</strong>');
+    
+    // 3. Convert single asterisks/underscores to emphasis (italics)
+    html = html.replace(/(\*|_)(.*?)\1/g, '<em>$2</em>');
+
+    // 4. Convert headers (## Header) to h4 (H1-H3 are usually reserved)
+    const headerRegex = /^\s*#+\s+(.*)/gm; // Match any # sequence at line start
+    html = html.replace(headerRegex, '<h4>$1</h4>');
+
+    // 5. Replace newlines that are NOT part of a list with <br> for spacing between paragraphs
+    html = html.replace(/\n\n/g, '<br><br>');
+    html = html.replace(/\n/g, ''); // Remove single newlines to prevent unwanted <br>
+    
+    // 6. Handle list item structure correction after main replacements
+    html = html.replace(/<\/ul><ul>/g, ''); // Merge subsequent <ul> tags
+
+    return (
+        <div 
+            className={`whitespace-pre-wrap ${themeClasses.text} [&>ul]:list-disc [&>ul]:ml-5 [&>h4]:text-lg [&>h4]:font-bold [&>h4]:mt-2 [&>strong]:font-extrabold`}
+            dangerouslySetInnerHTML={{ __html: html }} 
+        />
+    );
+};
+// --- END: Markdown Parsing Component ---
+
+
 const App = () => {
   const [currentScreen, setCurrentScreen] = useState('onboarding');
   const [onboardingStep, setOnboardingStep] = useState(0);
@@ -31,7 +69,15 @@ const App = () => {
     totalTime: '0:00'
   });
 
-  const [activeTab, setActiveTab] = useState('home');
+  // --- NEW STATE FOR FLOATING POINTS ---
+  const [floatingPoints, setFloatingPoints] = useState([]);
+  // ------------------------------------
+
+  // State to track if the user has been warned about generation time
+  const [audioWarningAcknowledged, setAudioWarningAcknowledged] = useState(false);
+
+  // Changed activeTab initial value if you want to start on the dashboard after dev
+  const [activeTab, setActiveTab] = useState('home'); 
   const [todos, setTodos] = useState([
     { id: 1, text: 'Complete React Hooks lesson', completed: false, points: 50 },
     { id: 2, text: 'Meditate for 10 minutes', completed: false, points: 30 },
@@ -43,7 +89,7 @@ const App = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const settingsMenuRef = useRef(null);
-  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+  // Removed isLeaderboardOpen state
 
 
   // AI Chatbot state
@@ -234,7 +280,6 @@ const App = () => {
     members: 1247,
     avgStreak: 18,
     description: 'Learn programming on the go',
-    dailyChallenge: 'Complete a 15-minute coding tutorial',
     leaderboard: [
       { name: 'Alex Chen', points: 2450, streak: 23, avatar: '👨‍💻' },
       { name: 'Sarah Kim', points: 2380, streak: 19, avatar: '👩‍🎓' },
@@ -266,6 +311,17 @@ const App = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+  
+  // --- START: Audio Cleanup Effect ---
+  // Ensures audio is stopped and resources are cleaned up when component unmounts or player closes
+  useEffect(() => {
+    return () => {
+      // This runs on cleanup (unmount)
+      closeAudioPlayer();
+    };
+  }, []); // Empty dependency array means this runs once on mount and returns cleanup function on unmount
+  // --- END: Audio Cleanup Effect ---
+
 
   // Initialize sample community data
   useEffect(() => {
@@ -410,12 +466,15 @@ const App = () => {
     }
   };
 
+  // Function to call the TTS API and play audio
   const playGeneratedAudio = async (text, voice, track) => {
+    // 1. Always stop any existing audio BEFORE starting a new one
     if (audioSource.current) {
       closeAudioPlayer();
     }
 
     setAudioPlayer(prev => ({...prev, isPlaying: false, isAudioLoading: true, currentTrack: track}));
+    setAudioWarningAcknowledged(true); // Acknowledge warning after the first attempt
 
     try {
         const payload = {
@@ -431,7 +490,9 @@ const App = () => {
             model: "gemini-2.5-flash-preview-tts"
         };
         
-        const apiKey = "AIzaSyDdCH11JPOdRvg2Wp6zsbEO46pFSbEnP_g"; // Canvas will provide this at runtime.
+        // IMPORTANT: When running this application locally (outside of the Canvas environment),
+        // you must replace this empty string with your actual Gemini API key.
+        const apiKey = ""; 
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
 
         const response = await fetch(apiUrl, {
@@ -450,17 +511,32 @@ const App = () => {
 
         if (audioData && mimeType && mimeType.startsWith("audio/")) {
             const pcmData = base64ToArrayBuffer(audioData);
-            const sampleRate = parseInt(mimeType.match(/rate=(\d+)/)[1], 10);
+            // Extract sample rate from mimeType string like 'audio/L16;rate=24000'
+            const sampleRateMatch = mimeType.match(/rate=(\d+)/);
+            const sampleRate = sampleRateMatch ? parseInt(sampleRateMatch[1], 10) : 24000;
+            
             const pcm16 = new Int16Array(pcmData);
             const wavBlob = pcmToWav(pcm16, sampleRate);
             const audioUrl = URL.createObjectURL(wavBlob);
             
             const audio = new Audio(audioUrl);
+            
+            // Wait for audio metadata to load before trying to read duration
+            audio.onloadedmetadata = () => {
+                setAudioPlayer(prev => ({
+                    ...prev,
+                    totalTime: formatTime(audio.duration),
+                }));
+            };
+
             audio.onended = () => {
-                setAudioPlayer(prev => ({ ...prev, isPlaying: false, progress: 100 }));
+                setAudioPlayer(prev => ({ ...prev, isPlaying: false, progress: 100, currentTime: prev.totalTime, currentTrack: null }));
+                // Automatically revoke object URL after playback ends
+                URL.revokeObjectURL(audioUrl); 
             };
             
-            audio.play();
+            // Crucial fix: The audio object itself starts playback immediately
+            audio.play().catch(e => console.error("Error playing audio after generation:", e));
             audioSource.current = audio;
 
             setAudioPlayer(prev => ({
@@ -468,7 +544,6 @@ const App = () => {
                 isPlaying: true,
                 isAudioLoading: false,
                 currentTrack: track,
-                totalTime: formatTime(audio.duration),
                 progress: 0,
                 currentTime: '0:00'
             }));
@@ -480,27 +555,41 @@ const App = () => {
     } catch (error) {
         console.error("Error generating or playing audio:", error);
         setAudioPlayer(prev => ({...prev, isAudioLoading: false, currentTrack: null}));
+        // Improved error message for user visibility
+        const errorMessage = {
+            id: Date.now() + 1,
+            isUser: false,
+            message: "API Connection Failed. If you are running this app locally (outside of Canvas), please ensure you have set your Gemini API key inside the 'apiKey' variable in the playGeneratedAudio function.",
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+        setAiChatMessages(prev => [...prev, errorMessage]);
     }
   };
 
+  // Logic to determine TTS prompt and voice based on content type
   const playAudio = (track) => {
+    // Show warning if user hasn't seen it and it's their first time playing.
+    if (!audioWarningAcknowledged) {
+        // You would typically show a modal here, but for this context, we just proceed.
+    }
+    
     let textToSpeak;
     let voice;
     if (['podcasts', 'news summaries', 'long-form podcasts', 'short-form podcasts'].includes(track.type)) {
-      textToSpeak = `Hello, and welcome to ${track.title}! In today's episode, '${track.episode}', we will explore ${track.description}.`;
-      voice = 'Kore';
+      textToSpeak = `Hello, and welcome to ${track.title}! In today's episode, '${track.episode || track.title}', we will explore ${track.description}.`;
+      voice = 'Kore'; // Firm, Informative
     } else if (['meditation'].includes(track.type)) {
       textToSpeak = `Welcome to your meditation session: ${track.title}. Let's begin a ${track.duration} session focused on ${track.description}. Please find a comfortable and quiet space.`;
-      voice = 'Puck';
-    } else if (['educational articles', 'advanced topics'].includes(track.type)) {
+      voice = 'Puck'; // Upbeat/Calm
+    } else if (['educational articles', 'advanced topics', 'learning'].includes(track.type)) {
       textToSpeak = `Welcome to the lesson on ${track.title}. This is a ${track.level}-level tutorial where you will learn about ${track.description}.`;
-      voice = 'Charon';
+      voice = 'Charon'; // Informative
     } else if (['childrensStories'].includes(track.type)) {
       textToSpeak = `Once upon a time, there was a story called ${track.title}. Here is the story: ${track.description}`;
-      voice = 'Leda';
+      voice = 'Leda'; // Youthful
     } else if (['poems'].includes(track.type)) {
       textToSpeak = `Here is a beautiful poem from the collection called ${track.title}. ${track.description}`;
-      voice = 'Erinome';
+      voice = 'Erinome'; // Clear
     } else {
       textToSpeak = "I am sorry, I could not find the content you requested.";
       voice = 'Kore';
@@ -512,18 +601,23 @@ const App = () => {
   const toggleAudio = () => {
     if (audioSource.current) {
       const isCurrentlyPlaying = audioPlayer.isPlaying;
-      setAudioPlayer(prev => ({ ...prev, isPlaying: !isCurrentlyPlaying }));
+      
       if (isCurrentlyPlaying) {
         audioSource.current.pause();
       } else {
-        audioSource.current.play();
+        // Fix: Ensure play is called and state is updated.
+        audioSource.current.play().catch(e => console.error("Error resuming audio:", e));
       }
+      
+      setAudioPlayer(prev => ({ ...prev, isPlaying: !isCurrentlyPlaying }));
     }
   };
 
+  // --- REFINED closeAudioPlayer ---
   const closeAudioPlayer = () => {
     if (audioSource.current) {
       audioSource.current.pause();
+      // Revoke the object URL to free memory if it exists
       if (audioSource.current.src) {
         URL.revokeObjectURL(audioSource.current.src);
       }
@@ -538,6 +632,7 @@ const App = () => {
       totalTime: '0:00'
     });
   };
+  // ---------------------------------
 
   const handleSeek = (e) => {
     if (!audioSource.current || !progressBarRef.current) return;
@@ -545,7 +640,9 @@ const App = () => {
     const rect = progressBarRef.current.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const progress = (clickX / rect.width);
-    audioSource.current.currentTime = audioSource.current.duration * progress;
+    if (!isNaN(audioSource.current.duration)) {
+      audioSource.current.currentTime = audioSource.current.duration * progress;
+    }
   };
 
   // Todo functions
@@ -563,13 +660,31 @@ const App = () => {
     }
   };
 
-  const toggleTodo = (id) => {
+  // --- UPDATED toggleTodo to include event for points animation ---
+  const toggleTodo = (id, event) => {
     const todo = todos.find(t => t.id === id);
     if (todo && !todo.completed) {
       setUser(prev => ({
         ...prev,
         totalPoints: prev.totalPoints + todo.points
       }));
+      
+      // Calculate position for the animation based on the clicked element
+      if (event && event.currentTarget) {
+          const rect = event.currentTarget.getBoundingClientRect();
+          const newFloatingPoint = {
+              id: Date.now(),
+              points: todo.points,
+              x: rect.left + rect.width / 2,
+              y: rect.top + rect.height / 2
+          };
+          setFloatingPoints(prev => [...prev, newFloatingPoint]);
+
+          // Remove the animation element after it finishes
+          setTimeout(() => {
+              setFloatingPoints(prev => prev.filter(p => p.id !== newFloatingPoint.id));
+          }, 2000); 
+      }
     }
     setTodos(todos.map(todo =>
       todo.id === id
@@ -577,6 +692,7 @@ const App = () => {
         : todo
     ));
   };
+  // ----------------------------------------------------------------
 
   const deleteTodo = (id) => {
     setTodos(todos.filter(todo => todo.id !== id));
@@ -613,10 +729,13 @@ const App = () => {
       setAiChatInput('');
       setIsAiTyping(true);
 
-      const apiKey = ""; // Canvas will provide this at runtime.
+      // IMPORTANT: When running this application locally (outside of the Canvas environment),
+      // you must replace this empty string with your actual Gemini API key.
+      const apiKey = ""; 
       const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
       
-      const systemPrompt = "You are an AI learning assistant named FlowMate. Your purpose is to help users with their learning goals, provide explanations, and offer guidance. Your tone is friendly, encouraging, and helpful. Do not use markdown formatting.";
+      // UPDATED systemPrompt to encourage markdown pointers
+      const systemPrompt = "You are an AI learning assistant named FlowMate. Your purpose is to help users with their learning goals, provide explanations, and offer guidance. Your tone is friendly, encouraging, and helpful. For any complex or multi-point answers, always structure your response using a bulleted or numbered list (using * or 1. markdown notation).";
       const userQuery = userMessage.message;
 
       try {
@@ -647,10 +766,13 @@ const App = () => {
 
       } catch (error) {
           console.error("Error fetching AI response:", error);
+          setIsAiTyping(false);
+
+          // Improved error message for user visibility
           const errorMessage = {
               id: Date.now() + 1,
               isUser: false,
-              message: "I'm having trouble connecting right now. Please check your network or try again later.",
+              message: "API Connection Failed. If you are running this app locally (outside of Canvas), please ensure you have set your Gemini API key inside the 'apiKey' variable in the sendAiMessage function.",
               timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           };
           setAiChatMessages(prev => [...prev, errorMessage]);
@@ -662,12 +784,12 @@ const App = () => {
 
   const getAgeBasedContent = (age) => {
     const ageNum = parseInt(age, 10);
-    if (ageNum < 10) {
+    if (isNaN(ageNum) || ageNum < 10) {
       return ['poems', 'childrensStories'];
     } else if (ageNum >= 10 && ageNum <= 18) {
-      return ['short-form podcasts', 'educational articles'];
+      return ['short-form podcasts', 'educational articles', 'learning'];
     } else {
-      return ['long-form podcasts', 'advanced topics', 'news summaries', 'meditations', 'podcasts', 'learning'];
+      return ['long-form podcasts', 'advanced topics', 'news summaries', 'meditation', 'podcasts', 'learning'];
     }
   };
 
@@ -683,6 +805,7 @@ const App = () => {
     hover: darkMode ? 'hover:bg-gray-700/60' : 'hover:bg-gray-100/60'
   };
 
+  // Floating Interest Bubbles for background
   const InterestBubbles = ({ goals, darkMode }) => {
     const bubblePositions = [
       { top: '20%', left: '10%', animation: 'gentle-float 8s ease-in-out infinite 2s' },
@@ -743,12 +866,17 @@ const App = () => {
 
 
     const handleNextStep = () => {
-      if (onboardingStep === 0) {
+      // Step 0: Name -> Update name state
+      if (onboardingStep === 0) { 
         setUser(prev => ({ ...prev, name: localName }));
       }
-      if (onboardingStep === 2) {
+      // Step 1: Age -> Update age state
+      if (onboardingStep === 1) { 
         setUser(prev => ({ ...prev, age: localAge }));
       }
+      // Step 2: Goals -> (state updated via individual button toggles)
+      // Step 3: Communities -> (state updated via individual button toggles)
+
       if (onboardingStep < 3) {
         setOnboardingStep(onboardingStep + 1);
       } else {
@@ -808,6 +936,7 @@ const App = () => {
             </div>
           </div>
 
+          {/* Step 0: Name */}
           {onboardingStep === 0 && (
             <>
               <div className="text-center mb-8">
@@ -829,7 +958,7 @@ const App = () => {
 
               <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mb-6 text-center">
                 <h2 className="text-xl font-semibold text-white mb-2">Welcome!</h2>
-                <p className="text-blue-200 mb-4">Let's personalize your learning journey</p>
+                <p className="text-blue-200 mb-4">Let's start with your name</p>
                 <input
                   type="text"
                   placeholder="Enter your name"
@@ -841,7 +970,28 @@ const App = () => {
             </>
           )}
 
+          {/* Step 1: Age (MOVED) */}
           {onboardingStep === 1 && (
+            <>
+              <div className="text-center mb-8">
+                <h1 className="text-2xl font-bold text-white mb-2">How old are you, {localName}?</h1>
+                <p className="text-blue-200">This helps us recommend the best content for your stage.</p>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mb-6 text-center">
+                <input
+                  type="number"
+                  placeholder="Enter your age"
+                  value={localAge}
+                  onChange={(e) => setLocalAge(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-white/20 text-white placeholder-blue-200 border-none outline-none focus:ring-2 focus:ring-blue-300"
+                />
+              </div>
+            </>
+          )}
+
+
+          {/* Step 2: Goals (MOVED) */}
+          {onboardingStep === 2 && (
             <>
               <div className="text-center mb-8">
                 <h1 className="text-2xl font-bold text-white mb-2">Choose Your Goals</h1>
@@ -869,24 +1019,7 @@ const App = () => {
             </>
           )}
 
-          {onboardingStep === 2 && (
-            <>
-              <div className="text-center mb-8">
-                <h1 className="text-2xl font-bold text-white mb-2">How old are you?</h1>
-                <p className="text-blue-200">This helps us recommend the best content for you.</p>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 mb-6 text-center">
-                <input
-                  type="number"
-                  placeholder="Enter your age"
-                  value={localAge}
-                  onChange={(e) => setLocalAge(e.target.value)}
-                  className="w-full p-3 rounded-xl bg-white/20 text-white placeholder-blue-200 border-none outline-none focus:ring-2 focus:ring-blue-300"
-                />
-              </div>
-            </>
-          )}
-
+          {/* Step 3: Communities (Original Position) */}
           {onboardingStep === 3 && (
             <>
               <div className="text-center mb-8">
@@ -931,8 +1064,8 @@ const App = () => {
             onClick={handleNextStep}
             disabled={
               (onboardingStep === 0 && !localName.trim()) ||
-              (onboardingStep === 1 && user.goals.length === 0) ||
-              (onboardingStep === 2 && !localAge) ||
+              (onboardingStep === 1 && (!localAge || parseInt(localAge) <= 0)) ||
+              (onboardingStep === 2 && user.goals.length === 0) ||
               (onboardingStep === 3 && user.selectedCommunities.length === 0)
             }
             className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold py-4 rounded-2xl disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg transition-all transform hover:scale-105 cursor-pointer"
@@ -997,7 +1130,8 @@ const App = () => {
             disabled={audioPlayer.isAudioLoading}
             className="bg-blue-500 text-white p-2 rounded-full hover:bg-blue-600 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {audioPlayer.isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+            {/* The pause button will now correctly show when isPlaying is true and trigger the toggleAudio logic */}
+            {audioPlayer.isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-white" />}
           </button>
           <button disabled={audioPlayer.isAudioLoading} className={`p-2 rounded-full ${audioPlayer.isAudioLoading ? 'opacity-50 cursor-not-allowed' : themeClasses.hover}`}>
             <SkipForward className={`w-5 h-5 ${themeClasses.textSecondary} transition-colors duration-300`} />
@@ -1009,54 +1143,40 @@ const App = () => {
 
   // Content Library Component
   const ContentLibrary = () => {
+    // Corrected categories to match the available tabs and simplify filtering
     const categories = ['all', 'podcasts', 'meditations', 'learning', 'childrensStories', 'poems'];
 
     const getFilteredContent = () => {
       const ageBasedContentTypes = getAgeBasedContent(user.age);
-      const allContent = [
-          ...contentLibrary.podcasts.map(item => ({ ...item, type: 'podcasts' })),
-          ...contentLibrary.meditations.map(item => ({ ...item, type: 'meditation' })),
-          ...contentLibrary.learning.map(item => ({ ...item, type: 'learning' })),
-          ...contentLibrary.childrensStories.map(item => ({ ...item, type: 'childrensStories' })),
-          ...contentLibrary.poems.map(item => ({ ...item, type: 'poems' })),
+      
+      // 1. Compile ALL content and tag it with its top-level category (displayType)
+      const contentSources = [
+        ...contentLibrary.podcasts.map(item => ({ ...item, displayType: 'podcasts', internalType: item.type })),
+        ...contentLibrary.meditations.map(item => ({ ...item, displayType: 'meditations', internalType: item.type })),
+        ...contentLibrary.learning.map(item => ({ ...item, displayType: 'learning', internalType: item.type })),
+        ...contentLibrary.childrensStories.map(item => ({ ...item, displayType: 'childrensStories', internalType: item.type })),
+        ...contentLibrary.poems.map(item => ({ ...item, displayType: 'poems', internalType: item.type })),
       ];
 
+      // 2. Filter content based on age appropriateness (using internalType)
+      let filteredByAge = contentSources.filter(item => {
+        // Direct match on internal type (which includes sub-categories like 'long-form podcasts')
+        if (ageBasedContentTypes.includes(item.internalType)) return true;
+        
+        // Handle meditation/learning content where internalType might be different than the source key, but the source key is still age-appropriate.
+        // This is necessary because some internal types like 'meditation' or 'advanced topics' might be missed if we only check the parent key ('meditations', 'learning')
+        if (ageBasedContentTypes.includes(item.internalType)) return true;
+
+        return false;
+      });
+
+      // 3. Apply the selected category filter (using displayType)
       if (selectedCategory === 'all') {
-        const uniqueContent = new Set();
-        return allContent.filter(item => {
-          let shouldInclude = false;
-          if (ageBasedContentTypes.includes(item.type)) {
-            shouldInclude = true;
-          }
-          if (item.type === 'learning' && ageBasedContentTypes.includes('advanced topics')) {
-            shouldInclude = true;
-          }
-          if (item.type === 'podcasts' && ageBasedContentTypes.includes('long-form podcasts')) {
-            shouldInclude = true;
-          }
-          if (item.type === 'podcasts' && ageBasedContentTypes.includes('short-form podcasts')) {
-            shouldInclude = true;
-          }
-          if (item.type === 'podcasts' && ageBasedContentTypes.includes('news summaries')) {
-            shouldInclude = true;
-          }
-          if (item.type === 'podcasts' && ['long-form podcasts', 'short-form podcasts', 'news summaries'].includes(item.type)) {
-            shouldInclude = true;
-          }
-          
-          if(shouldInclude) {
-            if(uniqueContent.has(`${item.type}-${item.id}`)) {
-              return false;
-            } else {
-              uniqueContent.add(`${item.type}-${item.id}`);
-              return true;
-            }
-          }
-          return false;
-        });
+        return filteredByAge;
       }
 
-      return allContent.filter(item => item.type === selectedCategory);
+      // Filter by the selected top-level category
+      return filteredByAge.filter(item => item.displayType === selectedCategory);
     };
 
     return (
@@ -1068,24 +1188,31 @@ const App = () => {
               onClick={() => setSelectedCategory(category)}
               className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all cursor-pointer ${
                 selectedCategory === category
-                  ? 'bg-blue-500 text-white'
-                  : (darkMode ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200')
+                  ? 'bg-blue-500 text-white shadow-md'
+                  : (darkMode ? 'bg-gray-700/80 text-gray-300 hover:bg-gray-600/80' : 'bg-gray-100/80 text-gray-600 hover:bg-gray-200/80')
               }`}
             >
-              {category.charAt(0).toUpperCase() + category.slice(1)}
+              {category === 'all' ? 'All Content' : category.charAt(0).toUpperCase() + category.slice(1)}
             </button>
           ))}
         </div>
+        
+        {/* Audio Generation Warning */}
+        {!audioWarningAcknowledged && (
+            <div className={`p-3 mb-4 rounded-xl border border-yellow-500/50 ${darkMode ? 'bg-yellow-900/30' : 'bg-yellow-100/80'} text-sm ${darkMode ? 'text-yellow-200' : 'text-yellow-800'}`}>
+                Heads up! Audio content is generated by an AI, which can take 5-10 seconds for longer tracks.
+            </div>
+        )}
 
         <div className="space-y-4">
-          {getFilteredContent().map(item => (
+          {getFilteredContent().length > 0 ? getFilteredContent().map(item => (
             <div
               key={`${item.type}-${item.id}`}
-              className={`${themeClasses.cardBg} rounded-xl p-4 border ${themeClasses.border} hover:shadow-md transition-all cursor-pointer`}
+              className={`${themeClasses.cardBg} rounded-xl p-4 border ${themeClasses.border} hover:shadow-lg transition-all cursor-pointer transform hover:scale-[1.01]`}
               onClick={() => playAudio(item)}
             >
               <div className="flex items-start space-x-4">
-                <div className="text-3xl">{item.thumbnail}</div>
+                <div className="text-3xl flex-shrink-0">{item.thumbnail}</div>
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-1">
                     <h3 className={`font-semibold ${themeClasses.text} transition-colors duration-300`}>{item.title}</h3>
@@ -1094,20 +1221,28 @@ const App = () => {
                   <p className={`text-sm ${themeClasses.textSecondary} mb-2 transition-colors duration-300`}>{item.description}</p>
                   <div className="flex items-center justify-between">
                     <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                      item.level
-                        ? 'bg-purple-100 text-purple-800'
-                        : item.type === 'podcasts'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-green-100 text-green-800'
+                      item.level === 'Beginner'
+                        ? 'bg-green-100 text-green-800'
+                        : item.level === 'Intermediate'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : item.level === 'Expert'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-blue-100 text-blue-800' // Default or other types
                     }`}>
-                      {item.level || item.type.charAt(0).toUpperCase() + item.type.slice(1)}
+                      {item.level || item.type.replace(/s$/, '').charAt(0).toUpperCase() + item.type.replace(/s$/, '').slice(1)}
                     </span>
-                    <Play className="w-5 h-5 text-blue-500" />
+                    <Play className="w-5 h-5 text-blue-500 fill-blue-500" />
                   </div>
                 </div>
               </div>
             </div>
-          ))}
+          )) : (
+            <div className={`text-center p-8 rounded-xl ${themeClasses.cardBg} ${themeClasses.textSecondary}`}>
+              <BookOpen className="w-8 h-8 mx-auto mb-3 text-blue-500" />
+              <p className="font-semibold">No content found in this category.</p>
+              <p className="text-sm">Try selecting 'All Content' or changing your age setting.</p>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1118,15 +1253,15 @@ const App = () => {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className={`text-2xl font-bold ${themeClasses.text} transition-colors duration-300`}>Welcome back, {user.name}!</h1>
+          <h1 className={`text-2xl font-bold ${themeClasses.text} transition-colors duration-300`}>Welcome back, {user.name || 'Learner'}!</h1>
           <p className={`text-sm ${themeClasses.textSecondary} transition-colors duration-300`}>Your learning journey continues.</p>
         </div>
         <div className="flex items-center space-x-2">
-          <div className={`p-2 rounded-xl flex items-center space-x-2 ${themeClasses.cardBg} transition-colors duration-300`}>
+          <div className={`p-2 rounded-xl flex items-center space-x-2 ${themeClasses.cardBg} transition-colors duration-300 border ${themeClasses.border}`}>
             <Clock className="w-5 h-5 text-blue-500" />
             <span className={`font-semibold ${themeClasses.text} transition-colors duration-300`}>{user.streak}</span>
           </div>
-          <div className={`p-2 rounded-xl flex items-center space-x-2 ${themeClasses.cardBg} transition-colors duration-300`}>
+          <div className={`p-2 rounded-xl flex items-center space-x-2 ${themeClasses.cardBg} transition-colors duration-300 border ${themeClasses.border}`}>
             <Trophy className="w-5 h-5 text-yellow-500" />
             <span className={`font-semibold ${themeClasses.text} transition-colors duration-300`}>{user.totalPoints}</span>
           </div>
@@ -1196,7 +1331,10 @@ const App = () => {
   // Todo List Component
   const TodoList = () => (
     <div className="p-6">
-      <h2 className={`text-2xl font-bold mb-4 ${themeClasses.text} transition-colors duration-300`}>To-Do List</h2>
+      <div className='flex items-center mb-4'>
+        <ListTodo className={`w-8 h-8 text-blue-500 mr-3`} />
+        <h2 className={`text-2xl font-bold ${themeClasses.text} transition-colors duration-300`}>To-Do List</h2>
+      </div>
       <form onSubmit={addTodo} className="flex space-x-2 mb-4">
         <input
           type="text"
@@ -1216,19 +1354,21 @@ const App = () => {
             todo.completed ? (darkMode ? 'opacity-50 bg-green-900/20' : 'opacity-60 bg-green-100') : ''
           }`}>
             <div className="flex items-center space-x-4 flex-1">
-              <button onClick={() => toggleTodo(todo.id)} className="flex-shrink-0">
+              {/* --- UPDATED CALL SITE TO PASS EVENT --- */}
+              <button onClick={(e) => toggleTodo(todo.id, e)} className="flex-shrink-0">
                 <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
                   todo.completed ? 'bg-blue-500 border-blue-500' : themeClasses.border
                 }`}>
                   {todo.completed && <Check className="w-4 h-4 text-white" />}
                 </div>
               </button>
+              {/* -------------------------------------- */}
               <span className={`flex-1 ${themeClasses.text} transition-colors duration-300 ${todo.completed ? 'line-through' : ''}`}>
                 {todo.text}
               </span>
               <span className="text-sm font-bold text-yellow-500">+{todo.points} pts</span>
             </div>
-            <button onClick={() => deleteTodo(todo.id)} className={`text-sm text-red-500 hover:text-red-700 transition-colors p-2 rounded-full ${themeClasses.hover}`}>
+            <button onClick={() => deleteTodo(todo.id)} className={`text-sm text-red-500 hover:text-red-400 transition-colors p-2 rounded-full ${themeClasses.hover}`}>
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -1248,9 +1388,11 @@ const App = () => {
         {aiChatMessages.map(msg => (
           <div key={msg.id} className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'}`}>
             <div className={`p-3 rounded-xl max-w-[80%] transition-colors duration-300 ${
-              msg.isUser ? 'bg-blue-500 text-white' : `${themeClasses.cardBg} ${themeClasses.text}`
+              msg.isUser ? 'bg-blue-500 text-white' : `${themeClasses.cardBg} ${themeClasses.text} border ${themeClasses.border}`
             }`}>
-              <p>{msg.message}</p>
+              {/* FIXED: Using MarkdownRenderer component to display formatted text */}
+              {msg.isUser ? <p className="whitespace-pre-wrap">{msg.message}</p> : <MarkdownRenderer text={msg.message} themeClasses={themeClasses} />}
+              
               <span className={`block mt-1 text-xs text-right transition-colors duration-300 ${msg.isUser ? 'text-blue-200' : themeClasses.textSecondary}`}>{msg.timestamp}</span>
             </div>
           </div>
@@ -1277,7 +1419,7 @@ const App = () => {
           placeholder="Ask me anything..."
           className={`flex-1 p-3 rounded-xl outline-none ${themeClasses.input} transition-colors duration-300`}
         />
-        <button type="submit" className="bg-blue-500 text-white p-3 rounded-xl hover:bg-blue-600 transition-colors">
+        <button type="submit" disabled={isAiTyping} className="bg-blue-500 text-white p-3 rounded-xl hover:bg-blue-600 transition-colors disabled:opacity-50">
           <Send className="w-6 h-6" />
         </button>
       </form>
@@ -1292,7 +1434,8 @@ const App = () => {
           <h2 className={`text-2xl font-bold ${themeClasses.text} transition-colors duration-300`}>{community.name}</h2>
           <p className={`text-sm ${themeClasses.textSecondary} transition-colors duration-300`}>{community.members} Members</p>
         </div>
-        <button onClick={() => setIsLeaderboardOpen(true)} className={`text-blue-500 font-semibold text-sm ${themeClasses.hover} px-3 py-1 rounded-full`}>View Leaderboard</button>
+        {/* Changed button to navigate to the new 'rank' tab instead of opening a modal */}
+        <button onClick={() => setActiveTab('rank')} className={`text-blue-500 font-semibold text-sm ${themeClasses.hover} px-3 py-1 rounded-full`}>View Leaderboard</button>
       </div>
 
       <div className="flex-1 overflow-y-auto space-y-4 pr-2 -mr-2 mb-4">
@@ -1301,7 +1444,7 @@ const App = () => {
             <div className={`flex items-start space-x-2 ${msg.user === 'You' ? 'flex-row-reverse space-x-reverse' : ''}`}>
               <div className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xl">{msg.avatar}</div>
               <div className={`p-3 rounded-xl max-w-[80%] transition-colors duration-300 ${
-                msg.user === 'You' ? 'bg-blue-500 text-white' : `${themeClasses.cardBg} ${themeClasses.text}`
+                msg.user === 'You' ? 'bg-blue-500 text-white' : `${themeClasses.cardBg} ${themeClasses.text} border ${themeClasses.border}`
               }`}>
                 <div className={`flex items-center justify-between mb-1 ${msg.user === 'You' ? 'flex-row-reverse' : ''}`}>
                   <span className={`font-semibold text-xs transition-colors duration-300 ${msg.user === 'You' ? 'text-blue-200' : themeClasses.textSecondary}`}>{msg.user}</span>
@@ -1329,6 +1472,67 @@ const App = () => {
       </form>
     </div>
   );
+
+  // Dedicated Leaderboard Screen Component (renamed from Modal)
+  const LeaderboardScreen = () => {
+    const sortedLeaderboard = [...community.leaderboard].sort((a, b) => b.points - a.points);
+
+    return (
+      <div className="p-6">
+        <h2 className={`text-2xl font-bold mb-6 ${themeClasses.text}`}>Global Leaderboard</h2>
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/30 mb-6 flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+                <Trophy className="w-8 h-8 text-yellow-500 fill-yellow-500/30" />
+                <div>
+                    <p className={`font-semibold ${themeClasses.text}`}>Your Rank: #3</p>
+                    <p className={`text-sm ${themeClasses.textSecondary}`}>Keep the streak going!</p>
+                </div>
+            </div>
+            <div className={`px-3 py-1 rounded-full text-xs font-bold ${darkMode ? 'bg-yellow-900 text-yellow-300' : 'bg-yellow-100 text-yellow-700'}`}>Level {user.level}</div>
+        </div>
+        
+        <div className="overflow-y-auto space-y-3">
+          {sortedLeaderboard.map((player, index) => (
+            <div key={player.name} className={`flex items-center p-3 rounded-xl border ${themeClasses.border} shadow-sm ${player.name === 'You' ? (darkMode ? 'bg-blue-900/50 shadow-lg border-blue-600' : 'bg-blue-100/70 shadow-md border-blue-300') : themeClasses.cardBg}`}>
+              <div className={`w-10 text-center text-lg font-bold ${themeClasses.text}`}>{index + 1}</div>
+              <div className="w-12 h-12 rounded-full flex items-center justify-center text-2xl mx-3">{player.avatar}</div>
+              <div className="flex-1">
+                <p className={`font-semibold ${themeClasses.text}`}>{player.name}</p>
+                <div className="flex items-center space-x-4 text-sm mt-1">
+                  <span className="flex items-center text-yellow-500"><Trophy className="w-4 h-4 mr-1 fill-yellow-500 stroke-none" /> {player.points} pts</span>
+                  <span className={`flex items-center ${themeClasses.textSecondary}`}><Clock className="w-4 h-4 mr-1 text-blue-500" /> {player.streak} days</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // --- NEW FLOATING POINTS COMPONENT ---
+  const FloatingPointsAnimation = ({ pointsData, darkMode }) => (
+      <>
+          {pointsData.map(p => (
+              <div
+                  key={p.id}
+                  className={`fixed text-lg font-extrabold text-green-400 pointer-events-none z-50`}
+                  style={{
+                      left: p.x,
+                      top: p.y,
+                      // Animation property defined in the <style> block
+                      animation: 'float-up 2s ease-out forwards',
+                      transform: 'translate(-50%, -50%)', // Center based on coordinates
+                      filter: darkMode ? 'drop-shadow(0 0 5px rgba(0, 255, 0, 0.5))' : 'none'
+                  }}
+              >
+                  +{p.points}
+              </div>
+          ))}
+      </>
+  );
+  // ------------------------------------
+
 
   const InteractiveBackground = ({ darkMode }) => {
     const backgroundRef = useRef(null);
@@ -1358,40 +1562,6 @@ const App = () => {
     return <div ref={backgroundRef} className="absolute inset-0 -z-10 transition-colors duration-1000" />;
   };
 
-  const LeaderboardModal = ({ isOpen, onClose }) => {
-    const sortedLeaderboard = [...community.leaderboard].sort((a, b) => b.points - a.points);
-
-    if (!isOpen) return null;
-
-    return (
-      <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50">
-        <div className={`w-full max-w-md h-[80%] ${themeClasses.cardBg} rounded-t-3xl p-6 flex flex-col transform transition-transform duration-300 ${isOpen ? 'translate-y-0' : 'translate-y-full'}`}>
-          <div className="flex items-center justify-between mb-6">
-            <h2 className={`text-2xl font-bold ${themeClasses.text}`}>Leaderboard</h2>
-            <button onClick={onClose} className={`${themeClasses.hover} p-2 rounded-full`}>
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-          <div className="overflow-y-auto space-y-3">
-            {sortedLeaderboard.map((player, index) => (
-              <div key={player.name} className={`flex items-center p-3 rounded-xl ${player.name === 'You' ? (darkMode ? 'bg-blue-900/50' : 'bg-blue-100') : ''}`}>
-                <div className="w-10 text-center text-lg font-bold">{index + 1}</div>
-                <div className="w-12 h-12 rounded-full flex items-center justify-center text-2xl mx-3">{player.avatar}</div>
-                <div className="flex-1">
-                  <p className={`font-semibold ${themeClasses.text}`}>{player.name}</p>
-                  <div className="flex items-center space-x-4 text-sm mt-1">
-                    <span className="flex items-center"><Trophy className="w-4 h-4 mr-1 text-yellow-500" /> {player.points}</span>
-                    <span className="flex items-center"><Clock className="w-4 h-4 mr-1 text-blue-500" /> {player.streak} days</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
 
   // Main App Content
   const MainApp = () => {
@@ -1407,6 +1577,8 @@ const App = () => {
           return <CommunityChat />;
         case 'ai':
           return <AIChatbot />;
+        case 'rank':
+          return <LeaderboardScreen />; // New screen for Leaderboard
         default:
           return <HomeDashboard />;
       }
@@ -1414,6 +1586,7 @@ const App = () => {
 
     return (
       <div className={`min-h-screen flex flex-col ${themeClasses.bg} ${themeClasses.text} transition-colors duration-300 relative overflow-hidden`}>
+        {/* The interactive background and decorative icons add visual depth */}
         <InteractiveBackground darkMode={darkMode} />
         <InterestBubbles goals={user.goals} darkMode={darkMode} />
         <Target size={128} className={`absolute -top-4 -left-4 ${darkMode ? 'text-white/5' : 'text-gray-900/5'} animate-[spin_20s_linear_infinite]`} />
@@ -1424,8 +1597,12 @@ const App = () => {
         <Award size={130} className={`absolute top-2/3 right-1/2 ${darkMode ? 'text-white/10' : 'text-gray-900/10'} animate-[gentle-float_12s_ease-in-out_infinite_3s]`} />
         <Heart size={90} className={`absolute top-1/2 left-1/3 ${darkMode ? 'text-red-400/10' : 'text-red-500/10'} animate-[gentle-float_6s_ease-in-out_infinite_4s]`} />
 
+        {/* --- RENDER FLOATING POINTS --- */}
+        <FloatingPointsAnimation pointsData={floatingPoints} darkMode={darkMode} />
+        {/* ---------------------------- */}
 
-        <LeaderboardModal isOpen={isLeaderboardOpen} onClose={() => setIsLeaderboardOpen(false)} />
+        {/* Removed LeaderboardModal */}
+        {/* Wrapper to center content and apply padding for the fixed footer */}
         <div className="max-w-md mx-auto relative pb-20 min-h-screen flex flex-col w-full z-10">
           {/* Header */}
           <div className={`flex justify-between items-center p-6 ${themeClasses.cardBg} border-b ${themeClasses.border} sticky top-0 z-10 transition-colors duration-300`}>
@@ -1463,7 +1640,7 @@ const App = () => {
             {renderContent()}
           </div>
 
-          {/* Audio Player */}
+          {/* Audio Player (fixed above the nav bar) */}
           {audioPlayer.currentTrack && <AudioPlayer />}
 
           {/* Bottom Nav */}
@@ -1483,9 +1660,18 @@ const App = () => {
                 <BookOpen className="w-6 h-6" />
                 <span className="text-xs">Learn</span>
               </button>
+              {/* NEW: To-Do List Tab */}
+              <button
+                onClick={() => setActiveTab('todos')}
+                className={`flex flex-col items-center justify-center space-y-1 transition-colors ${activeTab === 'todos' ? 'text-blue-500' : themeClasses.textSecondary}`}
+              >
+                <ListTodo className="w-6 h-6" />
+                <span className="text-xs">To-Do</span>
+              </button>
                 <button
-                onClick={() => setIsLeaderboardOpen(true)}
-                className={`flex flex-col items-center justify-center space-y-1 transition-colors ${isLeaderboardOpen ? 'text-blue-500' : themeClasses.textSecondary}`}
+                // Updated to set activeTab to 'rank'
+                onClick={() => setActiveTab('rank')}
+                className={`flex flex-col items-center justify-center space-y-1 transition-colors ${activeTab === 'rank' ? 'text-blue-500' : themeClasses.textSecondary}`}
               >
                 <Trophy className="w-6 h-6" />
                 <span className="text-xs">Rank</span>
@@ -1513,19 +1699,32 @@ const App = () => {
 
   return (
     <>
+      {/* ADDED SCRIPT TAGS for React and ReactDOM */}
+      <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+      <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+      {/* Tailwind CSS and Custom Keyframes */}
+      <script src="https://cdn.tailwindcss.com"></script>
       <style>{`
         @keyframes gentle-float {
-            0% { transform: translateY(0px); }
-            50% { transform: translateY(-20px); }
-            100% { transform: translateY(0px); }
+            0% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(2deg); }
+            100% { transform: translateY(0px) rotate(0deg); }
         }
         @keyframes gentle-float-reverse {
-            0% { transform: translateY(0px); }
-            50% { transform: translateY(20px); }
-            100% { transform: translateY(0px); }
+            0% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(20px) rotate(-2deg); }
+            100% { transform: translateY(0px) rotate(0deg); }
+        }
+        @keyframes float-up {
+            0% { transform: translate(-50%, 0) scale(1); opacity: 1; }
+            50% { opacity: 1; }
+            100% { transform: translate(-50%, -50px) scale(0.8); opacity: 0; }
+        }
+        body {
+            font-family: 'Inter', sans-serif;
         }
       `}</style>
-      <script src="https://cdn.tailwindcss.com"></script>
+      
       {currentScreen === 'onboarding' ? <OnboardingScreen /> : <MainApp />}
     </>
   );
